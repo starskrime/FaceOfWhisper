@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>S.A.I.A. - Strategic Artificial Intelligence Avatar</title>
+
+    <!-- Tracking.js for Face Detection -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tracking.js/1.1.3/tracking-min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tracking.js/1.1.3/data/face-min.js"></script>
+
+    <style>
+        body {
+            background-color: #000000;
+            color: #00FF00;
+            font-family: 'Courier New', Courier, monospace;
+            margin: 0;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            cursor: pointer;
+            /* Indicate clickable */
+        }
+
+        #canvas-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            background: radical-gradient(circle at center, #051a05 0%, #000000 70%);
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        .hud-text {
+            font-size: 14px;
+            opacity: 0.7;
+            text-shadow: 0 0 5px #00FF00;
+        }
+
+        #center-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 1.2rem;
+            color: #00FF00;
+            opacity: 0.5;
+            text-align: center;
+            letter-spacing: 2px;
+            animation: pulse 2s infinite;
+            pointer-events: none;
+        }
+
+        @keyframes pulse {
+            0% {
+                opacity: 0.3;
+            }
+
+            50% {
+                opacity: 0.8;
+            }
+
+            100% {
+                opacity: 0.3;
+            }
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        #video {
+            position: absolute;
+            top: -1000px;
+            left: -1000px;
+            visibility: hidden;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="canvas-container">
+        <canvas id="faceCanvas"></canvas>
+        <div id="ui-layer">
+            <div class="hud-text">SYSTEM: ONLINE<br>TARGET: <span id="target-status">SCANNING...</span></div>
+            <div class="hud-text" style="text-align: right;">CPU: 04%<br>MEM: 512TB</div>
+        </div>
+
+        <div id="center-text">
+            SYSTEM STANDBY<br>
+            [ TOUCH TERMINAL TO ENGAGE ]
+        </div>
+
+        <!-- Video for Head Tracking -->
+        <video id="video" width="640" height="480" preload autoplay loop muted></video>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('faceCanvas');
+        const ctx = canvas.getContext('2d');
+        const centerText = document.getElementById('center-text');
+        const targetStatus = document.getElementById('target-status');
+        const video = document.getElementById('video');
+
+        let width, height;
+        let audioContext, analyser, dataArray;
+        let nodes = [];
+        let isAudioInitialized = false;
+        let lastSpeechTime = 0;
+        let currentState = 'SPHERE';
+
+        // ARTIFACTS FOR SMART BEHAVIOR
+        let trackingX = 0;
+        let trackingY = 0;
+
+        let currentYaw = 0;
+        let currentPitch = 0;
+
+        let blinkState = 0;
+        let blinkValue = 0;
+        let nextBlinkTime = Date.now() + 3000;
+
+        // IMPLOSION STATE
+        let isFirstSpawn = true;
+
+        // CONFIGURATION
+        const config = {
+            nodeColor: '#00FF00',
+            lineColor: 'rgba(0, 255, 0, 0.12)',
+            connectionDistance: 45,
+            nodeRadius: 1.2,
+            idleAmplitude: 2.0,
+            idleSpeed: 0.0015,
+            audioSensitivity: 1.5, // Boosted sensitivity
+            sphereRadiusRatio: 0.35,
+            silenceTimeout: 10000,
+            speechThreshold: 5, // Lower threshold
+            transitionSpeedToFace: 0.15,
+            transitionSpeedToSphere: 0.02,
+            lookSpeed: 0.05,
+            blinkSpeed: 0.2
+        };
+
+        // Resize
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+            recenterNodes(false); // Do not re-explode on resize
+        }
+        window.addEventListener('resize', resize);
+
+        // ------------------------------------------------------------------
+        // 3D GEOMETRY GENERATION
+        // ------------------------------------------------------------------
+
+        function generateEllipse(cx, cy, rx, ry, cz, count, startAngle = 0, endAngle = Math.PI * 2, group = 0) {
+            const pts = [];
+            for (let i = 0; i < count; i++) {
+                const angle = startAngle + (endAngle - startAngle) * (i / (count - 1));
+                pts.push({
+                    x: cx + Math.cos(angle) * rx,
+                    y: cy + Math.sin(angle) * ry,
+                    z: cz,
+                    g: group,
+                    origY: cy + Math.sin(angle) * ry
+                });
+            }
+            return pts;
+        }
+
+        function generateParabola(x1, y1, z1, cx, cy, cz, x2, y2, z2, count, group = 0) {
+            const pts = [];
+            for (let i = 0; i <= count; i++) {
+                const t = i / count;
+                const x = (1 - t) * (1 - t) * x1 + 2 * (1 - t) * t * cx + t * t * x2;
+                const y = (1 - t) * (1 - t) * y1 + 2 * (1 - t) * t * cy + t * t * y2;
+                const z = (1 - t) * (1 - t) * z1 + 2 * (1 - t) * t * cz + t * t * z2;
+                pts.push({ x, y, z, g: group, origY: y });
+            }
+            return pts;
+        }
+
+        function generateFill(cx, cy, cz, width, height, depth, count, group = 0) {
+            const pts = [];
+            for (let i = 0; i < count; i++) {
+                const y = cy + (Math.random() - 0.5) * height;
+                pts.push({
+                    x: cx + (Math.random() - 0.5) * width,
+                    y: y,
+                    z: cz + (Math.random() - 0.5) * depth,
+                    g: group,
+                    origY: y
+                });
+            }
+            return pts;
+        }
+
+        let faceModel = [];
+
+        function buildFaceModel() {
+            // HIGH-FIDELITY WIREFRAME STRUCTURE (Topological Mesh)
+            faceModel = [];
+
+            // 1. ANIMATED FEATURES (Keep these for movement/blinking)
+            // ----------------------------------------------------------------
+            // EYES (Group 1) - Detailed Rings
+            faceModel.push(...generateEllipse(-0.35, -0.2, 0.12, 0.08, -0.1, 24, 0, Math.PI * 2, 1)); // L
+            faceModel.push(...generateEllipse(0.35, -0.2, 0.12, 0.08, -0.1, 24, 0, Math.PI * 2, 1)); // R
+            faceModel.push({ x: -0.35, y: -0.2, z: -0.05, g: 1, origY: -0.2 });
+            faceModel.push({ x: 0.35, y: -0.2, z: -0.05, g: 1, origY: -0.2 });
+
+            // MOUTH (Groups 3 & 4)
+            faceModel.push(...generateParabola(-0.25, 0.4, 0.1, 0, 0.35, 0.25, 0.25, 0.4, 0.1, 30, 3));
+            faceModel.push(...generateParabola(-0.25, 0.4, 0.1, 0, 0.55, 0.25, 0.25, 0.4, 0.1, 30, 4));
+
+            // JAWLINE (Group 5)
+            // Stronger, defined jaw
+            faceModel.push(...generateParabola(-0.65, -0.3, -0.3, -0.55, 0.8, 0.0, 0, 0.95, 0.2, 40, 5)); // L
+            faceModel.push(...generateParabola(0, 0.95, 0.2, 0.55, 0.8, 0.0, 0.65, -0.3, -0.3, 40, 5)); // R
+
+
+            // 2. STRUCTURAL WIREFRAME (The "Hi-Fi" Mesh)
+            // ----------------------------------------------------------------
+            // Instead of random dots, we create structured "Iso-lines" (Topography)
+
+            // A. VERTICAL LONGITUDE LINES (Forehead to Chin flow)
+            // Center Line (Nose Bridge)
+            faceModel.push(...generateParabola(0, -0.7, 0.3, 0, -0.2, 0.45, 0, 0.2, 0.5, 20, 6));
+            // Mid-Face Lines (Inner Cheeks)
+            faceModel.push(...generateParabola(-0.25, -0.65, 0.2, -0.2, 0.0, 0.35, -0.15, 0.8, 0.3, 20, 6)); // L
+            faceModel.push(...generateParabola(0.25, -0.65, 0.2, 0.2, 0.0, 0.35, 0.15, 0.8, 0.3, 20, 6)); // R
+            // Outer Face Lines (Cheekbones/Temples)
+            faceModel.push(...generateParabola(-0.5, -0.5, 0.1, -0.45, 0.1, 0.2, -0.35, 0.7, 0.15, 20, 6)); // L
+            faceModel.push(...generateParabola(0.5, -0.5, 0.1, 0.45, 0.1, 0.2, 0.35, 0.7, 0.15, 20, 6)); // R
+
+
+            // B. HORIZONTAL LATITUDE LINES (Cross-sections)
+            // Forehead Top
+            faceModel.push(...generateEllipse(0, -0.6, 0.5, 0.1, 0.2, 30, Math.PI, 2 * Math.PI, 6));
+            // Brow Line
+            faceModel.push(...generateParabola(-0.55, -0.35, 0.1, 0, -0.35, 0.35, 0.55, -0.35, 0.1, 30, 6));
+            // Under-Eye / Cheekbone Line
+            faceModel.push(...generateParabola(-0.6, -0.05, 0.1, 0, -0.1, 0.4, 0.6, -0.05, 0.1, 35, 6));
+            // Nose Tip Line (Short)
+            faceModel.push(...generateParabola(-0.15, 0.2, 0.3, 0, 0.22, 0.55, 0.15, 0.2, 0.3, 15, 6));
+            // Upper Lip / Cheek Line
+            faceModel.push(...generateParabola(-0.5, 0.3, 0.1, 0, 0.28, 0.4, 0.5, 0.3, 0.1, 30, 6));
+            // Chin Ridge
+            faceModel.push(...generateParabola(-0.25, 0.85, 0.2, 0, 0.9, 0.3, 0.25, 0.85, 0.2, 20, 6));
+
+            // C. CRANIUM (Back of head structure) - Low density
+            faceModel.push(...generateEllipse(0, -0.2, 0.68, 0.75, -0.2, 40, Math.PI, 2 * Math.PI, 0));
+        }
+
+        buildFaceModel();
+
+        // ------------------------------------------------------------------
+        // NODE CLASS
+        // ------------------------------------------------------------------
+
+        class FaceNode {
+            constructor(normX, normY, normZ, group, origY) {
+                this.faceNormX = normX;
+                this.faceNormY = normY;
+                this.faceNormZ = normZ;
+                this.group = group;
+                this.origNormY = origY;
+
+                const theta = Math.random() * 2 * Math.PI;
+                const phi = Math.acos((Math.random() * 2) - 1);
+                this.sphereNormX = Math.sin(phi) * Math.cos(theta);
+                this.sphereNormY = Math.sin(phi) * Math.sin(theta);
+                this.sphereNormZ = Math.cos(phi);
+
+                // INITIAL POSITION: IMPLOSION
+                // Initialize far away if first run
+                this.x = (Math.random() - 0.5) * window.innerWidth * 5;
+                this.y = (Math.random() - 0.5) * window.innerHeight * 5;
+                this.z = (Math.random() - 0.5) * 5000;
+
+                this.faceWorldX = 0; this.faceWorldY = 0; this.faceWorldZ = 0;
+                this.sphereWorldX = 0; this.sphereWorldY = 0; this.sphereWorldZ = 0;
+
+                this.phase = Math.random() * Math.PI * 2;
+                this.audioOffsetY = 0;
+            }
+
+            calculateTargets(centerX, centerY, scale) {
+                this.faceWorldX = centerX + this.faceNormX * scale;
+                this.faceWorldY = centerY + this.faceNormY * scale;
+                this.faceWorldZ = this.faceNormZ * scale;
+
+                if (this.group === 1) {
+                    this.eyeCenterY = centerY + (-0.2) * scale;
+                }
+
+                this.sphereRadius = scale * 0.85;
+                this.sphereWorldX = centerX + this.sphereNormX * this.sphereRadius;
+                this.sphereWorldY = centerY + this.sphereNormY * this.sphereRadius;
+                this.sphereWorldZ = this.sphereNormZ * this.sphereRadius;
+
+                // On resize (not first spawn), snap to sphere target to prevent re-explosion
+                if (!isFirstSpawn) {
+                    this.x = this.sphereWorldX;
+                    this.y = this.sphereWorldY;
+                    this.z = this.sphereWorldZ;
+                }
+            }
+
+            update(time, audioLevel, state) {
+                let tx, ty, tz;
+
+                if (state === 'FACE') {
+                    // TRACKING MAPPED TO ROTATION
+                    const lookX = trackingX * 0.8; // Reduced range (was 1.5)
+                    const lookY = trackingY * 0.6; // Reduced range (was 1.0)
+
+                    currentYaw += (lookX - currentYaw) * config.lookSpeed;
+                    currentPitch += (lookY - currentPitch) * config.lookSpeed;
+
+                    let bx = this.faceWorldX - width / 2;
+                    let by = this.faceWorldY - height / 2;
+                    let bz = this.faceWorldZ;
+
+                    if (this.group === 1) {
+                        const localY = this.faceWorldY - this.eyeCenterY;
+                        const blinkedY = localY * (1 - blinkValue);
+                        by = (this.eyeCenterY + blinkedY) - height / 2;
+                    }
+
+                    let audioMoveY = 0;
+                    if (isAudioInitialized) {
+                        const sensitivity = audioLevel / 255;
+                        const S = config.audioSensitivity;
+                        if (this.group === 5) audioMoveY = sensitivity * 80 * S; // Jaw: Boosted to 80
+                        else if (this.group === 4) audioMoveY = sensitivity * 80 * S; // Lower Lip: Boosted to 80
+                        else if (this.group === 3) audioMoveY = -sensitivity * 60 * S; // Upper Lip: Boosted to -60
+                    }
+                    this.audioOffsetY += (audioMoveY - this.audioOffsetY) * 0.4;
+                    by += this.audioOffsetY;
+
+                    let x1 = bx * Math.cos(currentYaw) - bz * Math.sin(currentYaw);
+                    let z1 = bx * Math.sin(currentYaw) + bz * Math.cos(currentYaw);
+                    let y2 = by * Math.cos(currentPitch) - z1 * Math.sin(currentPitch);
+                    let z2 = by * Math.sin(currentPitch) + z1 * Math.cos(currentPitch);
+
+                    tx = width / 2 + x1;
+                    ty = height / 2 + y2;
+                    tz = z2;
+
+                    tx += Math.sin(time * 0.001 + this.phase) * 0.5;
+                    ty += Math.cos(time * 0.002 + this.phase) * 0.5;
+
+                } else {
+                    // SPHERE
+                    const rotationSpeed = time * 0.0005;
+                    const cosR = Math.cos(rotationSpeed);
+                    const sinR = Math.sin(rotationSpeed);
+
+                    const rotX = this.sphereNormX * cosR - this.sphereNormZ * sinR;
+                    const rotZ = this.sphereNormX * sinR + this.sphereNormZ * cosR;
+
+                    tx = (width / 2) + rotX * this.sphereRadius;
+                    ty = (height / 2) + this.sphereNormY * this.sphereRadius;
+                    tz = rotZ * this.sphereRadius;
+
+                    tx += Math.sin(time * 0.002 + this.phase) * 5;
+                    ty += Math.cos(time * 0.003 + this.phase) * 5;
+                }
+
+                // If this is the STARTUP IMPLOSION, we might want a slightly different speed?
+                // The standard transitionSpeedToSphere (0.02) is actually quite nice for a slow fly-in.
+                const lerpSpeed = (state === 'FACE') ? config.transitionSpeedToFace : config.transitionSpeedToSphere;
+                this.x += (tx - this.x) * lerpSpeed;
+                this.y += (ty - this.y) * lerpSpeed;
+                this.z += (tz - this.z) * lerpSpeed;
+            }
+
+            draw() {
+                const perspective = 300;
+                const dist = perspective - this.z;
+
+                // SAFETY: If point is behind camera or too close (dist < 10), don't draw
+                if (dist < 10) return;
+
+                const scale = perspective / dist;
+
+                // SAFETY: If scale is massive (screen filling), skip
+                if (scale > 5.0) return;
+
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, config.nodeRadius * scale, 0, Math.PI * 2);
+                ctx.fillStyle = config.nodeColor;
+                ctx.fill();
+            }
+        }
+
+        // ------------------------------------------------------------------
+        // APP LOGIC
+        // ------------------------------------------------------------------
+
+        function recenterNodes(explode = true) {
+            nodes = [];
+            const centerX = width / 2;
+            const centerY = (height / 2) + 0;
+            const scale = Math.min(width, height) * 0.40;
+
+            // On first call (from script load), explode is true.
+            // On resize, we pass false manually.
+
+            faceModel.forEach(p => {
+                const node = new FaceNode(p.x, p.y, p.z || 0, p.g, p.origY);
+                node.calculateTargets(centerX, centerY, scale);
+                nodes.push(node);
+            });
+
+            // Disable explosion for future operations (like resize, if logic changes)
+            if (explode && isFirstSpawn) {
+                isFirstSpawn = false;
+            }
+        }
+
+        async function initApp() {
+            if (isAudioInitialized) return; // Prevent double init
+
+            try {
+                // HIGH RES FOR DISTANCE
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    audio: true,
+                    video: { width: 640, height: 480, frameRate: 15 }
+                });
+
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                analyser = audioContext.createAnalyser();
+                analyser.fftSize = 512;
+                analyser.smoothingTimeConstant = 0.5;
+                dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+                const audioSource = audioContext.createMediaStreamSource(stream);
+                audioSource.connect(analyser);
+
+                isAudioInitialized = true;
+                lastSpeechTime = Date.now();
+                centerText.classList.add('hidden');
+
+                video.srcObject = stream;
+                video.play();
+
+                const tracker = new tracking.ObjectTracker('face');
+                // SCALE 2 = DETECT SMALLER FACES (FURTHER AWAY)
+                tracker.setInitialScale(2);
+                tracker.setStepSize(2);
+                tracker.setEdgesDensity(0.1);
+
+                tracking.track('#video', tracker);
+
+                tracker.on('track', function (event) {
+                    if (event.data.length === 0) {
+                        trackingX *= 0.95;
+                        trackingY *= 0.95;
+                        targetStatus.innerText = "SCANNING...";
+                        targetStatus.style.color = "#00FF00";
+                    } else {
+                        const face = event.data[0];
+                        const cx = face.x + face.width / 2;
+                        const cy = face.y + face.height / 2;
+                        // MAPPED TO 640x480 - NO INVERSION based on user feedback
+                        const normX = (cx / 640) * 2 - 1;
+                        const normY = (cy / 480) * 2 - 1;
+                        trackingX = normX;
+                        trackingY = normY;
+                        targetStatus.innerText = "LOCKED";
+                        targetStatus.style.color = "red";
+                    }
+                });
+
+            } catch (err) {
+                console.error('Init Error:', err);
+                alert('Access denied. Please allow Microphone and Camera permissions to enable AI senses.');
+            }
+        }
+
+        function updateBlink(time) {
+            const now = Date.now();
+            if (blinkState === 0 && now > nextBlinkTime) {
+                blinkState = 1;
+            }
+            if (blinkState === 1) {
+                blinkValue += config.blinkSpeed;
+                if (blinkValue >= 1) { blinkValue = 1; blinkState = 2; }
+            } else if (blinkState === 2) {
+                blinkValue -= config.blinkSpeed;
+                if (blinkValue <= 0) { blinkValue = 0; blinkState = 0; nextBlinkTime = now + 2000 + Math.random() * 4000; }
+            }
+        }
+
+        function animate(time) {
+            ctx.clearRect(0, 0, width, height);
+
+            let audioVol = 0;
+            if (isAudioInitialized) {
+                analyser.getByteFrequencyData(dataArray);
+                let sum = 0;
+                for (let i = 0; i < 100; i++) sum += dataArray[i];
+                audioVol = sum / 100;
+
+                const now = Date.now();
+                if (audioVol > config.speechThreshold) {
+                    currentState = 'FACE';
+                    lastSpeechTime = now;
+                } else {
+                    if (now - lastSpeechTime > config.silenceTimeout) currentState = 'SPHERE';
+                }
+            } else {
+                currentState = 'SPHERE';
+            }
+
+            if (currentState === 'FACE') updateBlink();
+
+            // DRAW BACKLIGHT
+            // Pulse with audio or idle sine
+            let glowRadius = 200 + (audioVol * 2);
+            if (!isAudioInitialized) {
+                glowRadius = 200 + Math.sin(time * 0.002) * 30;
+            }
+
+            const glow = ctx.createRadialGradient(width / 2, height / 2, 50, width / 2, height / 2, glowRadius * 2);
+            glow.addColorStop(0, "rgba(0, 255, 0, 0.25)");
+            glow.addColorStop(0.5, "rgba(0, 50, 0, 0.1)");
+            glow.addColorStop(1, "rgba(0, 0, 0, 0)");
+
+            ctx.fillStyle = glow;
+            ctx.fillRect(0, 0, width, height);
+
+            // UPDATE
+            nodes.forEach(n => n.update(time, audioVol, currentState));
+            nodes.sort((a, b) => a.z - b.z);
+
+            // DRAW CONNECTIONS
+            const maxConnectDist = config.connectionDistance * config.connectionDistance;
+            for (let i = 0; i < nodes.length; i++) {
+                const nodeA = nodes[i];
+                for (let j = i + 1; j < nodes.length; j++) {
+                    const nodeB = nodes[j];
+                    const dx = nodeA.x - nodeB.x;
+                    if (Math.abs(dx) > config.connectionDistance) continue;
+                    const dy = nodeA.y - nodeB.y;
+                    if (Math.abs(dy) > config.connectionDistance) continue;
+                    const dz = nodeA.z - nodeB.z;
+                    if (Math.abs(dz) > config.connectionDistance) continue;
+
+                    const distSq = dx * dx + dy * dy + dz * dz;
+                    if (distSq < maxConnectDist) {
+                        const alpha = 1 - (distSq / maxConnectDist);
+                        ctx.strokeStyle = `rgba(0, 255, 0, ${alpha * 0.35})`;
+                        ctx.beginPath();
+                        ctx.moveTo(nodeA.x, nodeA.y);
+                        ctx.lineTo(nodeB.x, nodeB.y);
+                        ctx.stroke();
+                    }
+                }
+            }
+
+            // DRAW NODES
+            nodes.forEach(n => n.draw());
+
+            requestAnimationFrame(animate);
+        }
+
+        // Initialize with IMPLOSION
+        resize(); // Calls checkNodes -> triggers first spawn explosion
+        animate(0);
+
+        // Click Anywhere to Start
+        document.addEventListener('click', () => initApp());
+
+    </script>
+</body>
+
+</html>
