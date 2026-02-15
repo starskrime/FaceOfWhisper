@@ -149,8 +149,8 @@
         const config = {
             nodeColor: '#00FF00',
             lineColor: 'rgba(0, 255, 0, 0.12)',
-            connectionDistance: 40, // Slightly reduced for density check
-            nodeRadius: 0.8, // Finer nodes for hi-fi look
+            connectionDistance: 45, // Slightly increased for cranium connection
+            nodeRadius: 0.8,
             idleAmplitude: 2.0,
             idleSpeed: 0.0015,
             audioSensitivity: 1.5,
@@ -192,7 +192,7 @@
             return pts;
         }
 
-        // CUBIC BEZIER (For organic curves: Lips, Eyelids, Nose Profile)
+        // CUBIC BEZIER (For organic curves)
         function generateBezier(x0, y0, z0, x1, y1, z1, x2, y2, z2, x3, y3, z3, count, group = 0) {
             const pts = [];
             for (let i = 0; i <= count; i++) {
@@ -232,97 +232,101 @@
         let faceModel = [];
 
         function buildFaceModel() {
-            // BIOMETRIC FACE SCULPT (Parametric Anatomy)
             faceModel = [];
 
             // 1. EYES (Orbitals) - Group 1
-            // ----------------------------------------------------
-            // Left Eye
             const LX = -0.35, LY = -0.2, LZ = -0.1;
-            // Upper Lid (Almond)
-            faceModel.push(...generateBezier(LX - 0.18, LY, LZ, LX - 0.05, LY - 0.12, LZ, LX + 0.05, LY - 0.12, LZ, LX + 0.18, LY, LZ, 15, 1));
-            // Lower Lid (Almond)
-            faceModel.push(...generateBezier(LX - 0.18, LY, LZ, LX - 0.05, LY + 0.08, LZ, LX + 0.05, LY + 0.08, LZ, LX + 0.18, LY, LZ, 15, 1));
-            // Iris Rings
-            faceModel.push(...generateEllipse(LX, LY, 0.09, 0.09, LZ - 0.02, 16, 0, Math.PI * 2, 1));
-            faceModel.push(...generateEllipse(LX, LY, 0.05, 0.05, LZ - 0.04, 12, 0, Math.PI * 2, 1));
-            // Pupil
-            faceModel.push({ x: LX, y: LY, z: LZ - 0.05, g: 1, origY: LY });
+            faceModel.push(...generateBezier(LX - 0.18, LY, LZ, LX - 0.05, LY - 0.12, LZ, LX + 0.05, LY - 0.12, LZ, LX + 0.18, LY, LZ, 15, 1)); // Upper Lid
+            faceModel.push(...generateBezier(LX - 0.18, LY, LZ, LX - 0.05, LY + 0.08, LZ, LX + 0.05, LY + 0.08, LZ, LX + 0.18, LY, LZ, 15, 1)); // Lower Lid
+            faceModel.push(...generateEllipse(LX, LY, 0.09, 0.09, LZ - 0.02, 16, 0, Math.PI * 2, 1)); // Iris
+            faceModel.push({ x: LX, y: LY, z: LZ - 0.05, g: 1, origY: LY }); // Pupil
 
-            // Right Eye
             const RX = 0.35, RY = -0.2, RZ = -0.1;
-            // Upper Lid
-            faceModel.push(...generateBezier(RX - 0.18, RY, RZ, RX - 0.05, RY - 0.12, RZ, RX + 0.05, RY - 0.12, RZ, RX + 0.18, RY, RZ, 15, 1));
-            // Lower Lid
-            faceModel.push(...generateBezier(RX - 0.18, RY, RZ, RX - 0.05, RY + 0.08, RZ, RX + 0.05, RY + 0.08, RZ, RX + 0.18, RY, RZ, 15, 1));
-            // Iris
-            faceModel.push(...generateEllipse(RX, RY, 0.09, 0.09, RZ - 0.02, 16, 0, Math.PI * 2, 1));
-            faceModel.push(...generateEllipse(RX, RY, 0.05, 0.05, RZ - 0.04, 12, 0, Math.PI * 2, 1));
-            // Pupil
-            faceModel.push({ x: RX, y: RY, z: RZ - 0.05, g: 1, origY: RY });
+            faceModel.push(...generateBezier(RX - 0.18, RY, RZ, RX - 0.05, RY - 0.12, RZ, RX + 0.05, RY - 0.12, RZ, RX + 0.18, RY, RZ, 15, 1)); // Upper Lid
+            faceModel.push(...generateBezier(RX - 0.18, RY, RZ, RX - 0.05, RY + 0.08, RZ, RX + 0.05, RY + 0.08, RZ, RX + 0.18, RY, RZ, 15, 1)); // Lower Lid
+            faceModel.push(...generateEllipse(RX, RY, 0.09, 0.09, RZ - 0.02, 16, 0, Math.PI * 2, 1)); // Iris
+            faceModel.push({ x: RX, y: RY, z: RZ - 0.05, g: 1, origY: RY }); // Pupil
 
+            // 2. NOSE (Nasal Bone) - Group 2
+            faceModel.push(...generateBezier(0, -0.35, -0.15, 0, -0.2, 0.35, 0, 0.1, 0.45, 0, 0.15, 0.5, 20, 2)); // Bridge
+            faceModel.push(...generateBezier(-0.08, -0.3, -0.05, -0.12, -0.1, 0.2, -0.15, 0.1, 0.25, -0.18, 0.18, 0.2, 20, 2)); // L Side
+            faceModel.push(...generateBezier(0.08, -0.3, -0.05, 0.12, -0.1, 0.2, 0.15, 0.1, 0.25, 0.18, 0.18, 0.2, 20, 2)); // R Side
+            faceModel.push(...generateBezier(-0.05, 0.2, 0.35, -0.12, 0.18, 0.3, -0.15, 0.25, 0.25, -0.02, 0.23, 0.3, 12, 2)); // L Nostril
+            faceModel.push(...generateBezier(0.05, 0.2, 0.35, 0.12, 0.18, 0.3, 0.15, 0.25, 0.25, 0.02, 0.23, 0.3, 12, 2)); // R Nostril
+            faceModel.push(...generateBezier(-0.02, 0.23, 0.3, 0, 0.25, 0.55, 0, 0.25, 0.55, 0.02, 0.23, 0.3, 10, 2)); // Tip Loop
 
-            // 2. NOSE (Nasal Bone & Cartilage) - Group 2 (Static)
-            // ----------------------------------------------------
-            // Bridge (Vertical Curve)
-            faceModel.push(...generateBezier(0, -0.35, -0.15, 0, -0.2, 0.35, 0, 0.1, 0.45, 0, 0.15, 0.5, 20, 2));
-            // Side Bridges (Width)
-            faceModel.push(...generateBezier(-0.08, -0.3, -0.05, -0.12, -0.1, 0.2, -0.15, 0.1, 0.25, -0.18, 0.18, 0.2, 20, 2)); // L
-            faceModel.push(...generateBezier(0.08, -0.3, -0.05, 0.12, -0.1, 0.2, 0.15, 0.1, 0.25, 0.18, 0.18, 0.2, 20, 2)); // R
-            // Nostrils (Loop/Spiral)
-            faceModel.push(...generateBezier(-0.05, 0.2, 0.35, -0.12, 0.18, 0.3, -0.15, 0.25, 0.25, -0.02, 0.23, 0.3, 12, 2)); // L
-            faceModel.push(...generateBezier(0.05, 0.2, 0.35, 0.12, 0.18, 0.3, 0.15, 0.25, 0.25, 0.02, 0.23, 0.3, 12, 2)); // R
-            // Tip Bulb
-            faceModel.push(...generateEllipse(0, 0.18, 0.08, 0.06, 0.52, 10, 0, Math.PI * 2, 2));
-
-
-            // 3. MOUTH (Oral) - Group 3 (Upper) & 4 (Lower)
-            // ----------------------------------------------------
-            // Cupid's Bow (Upper Lip Top)
+            // 3. MOUTH (Oral) - Group 3/4
             const MY = 0.45;
-            faceModel.push(...generateBezier(-0.25, MY, 0.1, -0.15, MY - 0.08, 0.15, -0.05, MY - 0.02, 0.2, 0, MY - 0.05, 0.2, 10, 3)); // L
-            faceModel.push(...generateBezier(0, MY - 0.05, 0.2, 0.05, MY - 0.02, 0.2, 0.15, MY - 0.08, 0.15, 0.25, MY, 0.1, 10, 3)); // R
-            // Upper Lip Bottom (Meeting line)
-            faceModel.push(...generateBezier(-0.25, MY, 0.1, -0.1, MY + 0.02, 0.25, 0.1, MY + 0.02, 0.25, 0.25, MY, 0.1, 20, 3));
+            faceModel.push(...generateBezier(-0.25, MY, 0.1, -0.15, MY - 0.08, 0.15, -0.05, MY - 0.02, 0.2, 0, MY - 0.05, 0.2, 15, 3)); // L Upper
+            faceModel.push(...generateBezier(0, MY - 0.05, 0.2, 0.05, MY - 0.02, 0.2, 0.15, MY - 0.08, 0.15, 0.25, MY, 0.1, 15, 3)); // R Upper
+            faceModel.push(...generateBezier(-0.25, MY, 0.1, -0.1, MY + 0.02, 0.25, 0.1, MY + 0.02, 0.25, 0.25, MY, 0.1, 25, 3)); // Mid Line
+            faceModel.push(...generateBezier(-0.25, MY, 0.1, -0.1, MY + 0.02, 0.25, 0.1, MY + 0.02, 0.25, 0.25, MY, 0.1, 25, 4)); // Mid Line (Lower)
+            faceModel.push(...generateBezier(-0.25, MY, 0.1, -0.12, MY + 0.15, 0.2, 0.12, MY + 0.15, 0.2, 0.25, MY, 0.1, 25, 4)); // Lower Lip Bottom
 
-            // Lower Lip Top (Meeting line)
-            faceModel.push(...generateBezier(-0.25, MY, 0.1, -0.1, MY + 0.02, 0.25, 0.1, MY + 0.02, 0.25, 0.25, MY, 0.1, 20, 4));
-            // Lower Lip Bottom (Fullness)
-            faceModel.push(...generateBezier(-0.25, MY, 0.1, -0.12, MY + 0.15, 0.2, 0.12, MY + 0.15, 0.2, 0.25, MY, 0.1, 20, 4));
-
-
-            // 4. FACE CONTOUR (Mandible/Zygomatic) - Group 5
+            // 4. FACE CONTOUR EXTENDED (Jaw/Cheek Wrap) - Group 5
             // ----------------------------------------------------
-            // Jawline
-            faceModel.push(...generateBezier(-0.6, -0.2, -0.2, -0.55, 0.5, 0.0, -0.25, 0.9, 0.15, 0, 0.95, 0.2, 30, 5)); // L
-            faceModel.push(...generateBezier(0.6, -0.2, -0.2, 0.55, 0.5, 0.0, 0.25, 0.9, 0.15, 0, 0.95, 0.2, 30, 5)); // R
+            // Jawline wrapping back to Ear
+            // L: Chin -> Jaw Angle -> Ear Bottom
+            faceModel.push(...generateBezier(0, 0.95, 0.2, -0.3, 0.9, 0.15, -0.55, 0.5, 0.0, -0.65, 0.1, 0.2, 40, 5)); 
+            // R: Chin -> Jaw Angle -> Ear Bottom
+            faceModel.push(...generateBezier(0, 0.95, 0.2, 0.3, 0.9, 0.15, 0.55, 0.5, 0.0, 0.65, 0.1, 0.2, 40, 5));
+
+            // Cheekbones wrapping back to Ear Top
+            // L: Nose Area -> Zygomatic Arch -> Ear Top
+            faceModel.push(...generateBezier(-0.2, 0.1, 0.25, -0.35, 0.05, 0.2, -0.55, -0.1, 0.1, -0.65, -0.15, 0.2, 30, 5));
+            // R: Nose Area -> Zygomatic Arch -> Ear Top
+            faceModel.push(...generateBezier(0.2, 0.1, 0.25, 0.35, 0.05, 0.2, 0.55, -0.1, 0.1, 0.65, -0.15, 0.2, 30, 5));
+
+
+            // 5. EARS (Auricle) - Group 7
+            // ----------------------------------------------------
+            // Left Ear
+            const LEX = -0.7, LEY = -0.05, LEZ = 0.25;
+            // Helix (Outer Rim C-shape)
+            faceModel.push(...generateBezier(LEX, LEY - 0.2, LEZ, LEX - 0.15, LEY - 0.25, LEZ - 0.05, LEX - 0.15, LEY + 0.15, LEZ - 0.05, LEX, LEY + 0.25, LEZ, 20, 7));
+            // Tragus/Lobe connection
+            faceModel.push(...generateBezier(LEX, LEY + 0.25, LEZ, LEX + 0.05, LEY + 0.2, LEZ + 0.05, LEX + 0.05, LEY - 0.15, LEZ + 0.05, LEX, LEY - 0.2, LEZ, 15, 7));
+
+            // Right Ear
+            const REX = 0.7, REY = -0.05, REZ = 0.25;
+            // Helix
+            faceModel.push(...generateBezier(REX, REY - 0.2, REZ, REX + 0.15, REY - 0.25, REZ - 0.05, REX + 0.15, REY + 0.15, REZ - 0.05, REX, REY + 0.25, REZ, 20, 7));
+            // Tragus/Lobe
+            faceModel.push(...generateBezier(REX, REY + 0.25, REZ, REX - 0.05, REY + 0.2, REZ + 0.05, REX - 0.05, REY - 0.15, REZ + 0.05, REX, REY - 0.2, REZ, 15, 7));
+
+
+            // 6. CRANIUM (Full Skull Volume) - Group 8 (Static)
+            // ----------------------------------------------------
+            // Top of Head: Forehead -> Crown -> Back
+            faceModel.push(...generateBezier(0, -0.65, 0.25, 0, -0.85, 0.1, 0, -0.85, -0.5, 0, -0.5, -0.8, 40, 8));
             
-            // Cheekbones (Zygomatic Arch)
-            faceModel.push(...generateBezier(-0.6, -0.1, -0.2, -0.45, -0.05, 0.2, -0.3, 0.3, 0.15, -0.2, 0.45, 0.1, 20, 5)); // L
-            faceModel.push(...generateBezier(0.6, -0.1, -0.2, 0.45, -0.05, 0.2, 0.3, 0.3, 0.15, 0.2, 0.45, 0.1, 20, 5)); // R
+            // Side Parietal (Temples -> Back)
+            // L
+            faceModel.push(...generateBezier(-0.55, -0.4, 0.1, -0.65, -0.6, 0.0, -0.65, -0.6, -0.5, -0.4, -0.4, -0.75, 35, 8));
+            // R
+            faceModel.push(...generateBezier(0.55, -0.4, 0.1, 0.65, -0.6, 0.0, 0.65, -0.6, -0.5, 0.4, -0.4, -0.75, 35, 8));
+
+            // Occipital (Lower Back of Head)
+            // L Ear -> Back of Neck -> R Ear
+            faceModel.push(...generateBezier(-0.65, 0.1, 0.2, -0.6, 0.3, -0.4, -0.2, 0.5, -0.7, 0, 0.5, -0.8, 25, 8)); // L Quarter
+            faceModel.push(...generateBezier(0.65, 0.1, 0.2, 0.6, 0.3, -0.4, 0.2, 0.5, -0.7, 0, 0.5, -0.8, 25, 8)); // R Quarter
+            
+            // Horizontal Bands for Volume (Back of Head)
+            faceModel.push(...generateEllipse(0, -0.2, 0.6, 0.65, -0.5, 40, Math.PI, 2 * Math.PI, 8)); // Upper
+            faceModel.push(...generateEllipse(0, 0.2, 0.55, 0.6, -0.6, 40, Math.PI, 2 * Math.PI, 8)); // Mid
 
 
-            // 5. FOREHEAD (Cranium) - Group 0/6
+            // 7. VOLUME FILLS (Skin) - Group 6
             // ----------------------------------------------------
-            // Brow Ridge
-            faceModel.push(...generateBezier(-0.5, -0.3, 0.0, -0.2, -0.35, 0.15, 0.2, -0.35, 0.15, 0.5, -0.3, 0.0, 30, 0));
-            // Hairline/Top
-            faceModel.push(...generateEllipse(0, -0.65, 0.55, 0.25, -0.1, 30, Math.PI, 2*Math.PI, 0));
+            faceModel.push(...generateFillDetailed(-0.35, 0.1, 0.1, 0.35, 0.4, 0.3, 200, 6)); // L Cheek
+            faceModel.push(...generateFillDetailed(0.35, 0.1, 0.1, 0.35, 0.4, 0.3, 200, 6)); // R Cheek
+            faceModel.push(...generateFillDetailed(0, -0.45, 0.1, 0.7, 0.3, 0.4, 150, 6)); // Forehead
+            faceModel.push(...generateFillDetailed(0, 0.75, 0.15, 0.3, 0.25, 0.2, 60, 5)); // Chin
+            faceModel.push(...generateFillDetailed(0, -0.1, 0.25, 0.15, 0.5, 0.3, 60, 2)); // Nose Bridge
 
-
-            // 6. VOLUME FILL (High Density Skin) - Group 6
-            // ----------------------------------------------------
-            // Cheeks
-            faceModel.push(...generateFillDetailed(-0.35, 0.1, 0.1, 0.35, 0.4, 0.3, 200, 6)); // L
-            faceModel.push(...generateFillDetailed(0.35, 0.1, 0.1, 0.35, 0.4, 0.3, 200, 6)); // R
-            // Forehead
-            faceModel.push(...generateFillDetailed(0, -0.45, 0.1, 0.7, 0.3, 0.4, 150, 6));
-            // Chin
-            faceModel.push(...generateFillDetailed(0, 0.75, 0.15, 0.3, 0.25, 0.2, 60, 5));
-            // Nose Bridge Sides
-            faceModel.push(...generateFillDetailed(0, -0.1, 0.25, 0.15, 0.5, 0.3, 60, 2));
-
-            // Total nodes: ~1000+
+            // Side Fills (Temples area)
+            faceModel.push(...generateFillDetailed(-0.55, -0.2, 0.0, 0.2, 0.4, 0.2, 50, 6));
+            faceModel.push(...generateFillDetailed(0.55, -0.2, 0.0, 0.2, 0.4, 0.2, 50, 6));
         }
 
         buildFaceModel();
@@ -346,7 +350,6 @@
                 this.sphereNormZ = Math.cos(phi);
 
                 // INITIAL POSITION: IMPLOSION
-                // Initialize far away if first run
                 this.x = (Math.random() - 0.5) * window.innerWidth * 5;
                 this.y = (Math.random() - 0.5) * window.innerHeight * 5;
                 this.z = (Math.random() - 0.5) * 5000;
@@ -372,7 +375,7 @@
                 this.sphereWorldY = centerY + this.sphereNormY * this.sphereRadius;
                 this.sphereWorldZ = this.sphereNormZ * this.sphereRadius;
 
-                // On resize (not first spawn), snap to sphere target to prevent re-explosion
+                // On resize (not first spawn), snap to sphere target
                 if (!isFirstSpawn) {
                     this.x = this.sphereWorldX;
                     this.y = this.sphereWorldY;
@@ -385,8 +388,8 @@
 
                 if (state === 'FACE') {
                     // TRACKING MAPPED TO ROTATION
-                    const lookX = trackingX * 0.8; // Reduced range (was 1.5)
-                    const lookY = trackingY * 0.6; // Reduced range (was 1.0)
+                    const lookX = trackingX * 0.8; 
+                    const lookY = trackingY * 0.6; 
 
                     currentYaw += (lookX - currentYaw) * config.lookSpeed;
                     currentPitch += (lookY - currentPitch) * config.lookSpeed;
@@ -405,9 +408,9 @@
                     if (isAudioInitialized) {
                         const sensitivity = audioLevel / 255;
                         const S = config.audioSensitivity;
-                        if (this.group === 5) audioMoveY = sensitivity * 80 * S; // Jaw: Boosted to 80
-                        else if (this.group === 4) audioMoveY = sensitivity * 80 * S; // Lower Lip: Boosted to 80
-                        else if (this.group === 3) audioMoveY = -sensitivity * 60 * S; // Upper Lip: Boosted to -60
+                        if (this.group === 5) audioMoveY = sensitivity * 80 * S; // Jaw
+                        else if (this.group === 4) audioMoveY = sensitivity * 80 * S; // Lower Lip
+                        else if (this.group === 3) audioMoveY = -sensitivity * 60 * S; // Upper Lip
                     }
                     this.audioOffsetY += (audioMoveY - this.audioOffsetY) * 0.4;
                     by += this.audioOffsetY;
@@ -441,8 +444,6 @@
                     ty += Math.cos(time * 0.003 + this.phase) * 5;
                 }
 
-                // If this is the STARTUP IMPLOSION, we might want a slightly different speed?
-                // The standard transitionSpeedToSphere (0.02) is actually quite nice for a slow fly-in.
                 const lerpSpeed = (state === 'FACE') ? config.transitionSpeedToFace : config.transitionSpeedToSphere;
                 this.x += (tx - this.x) * lerpSpeed;
                 this.y += (ty - this.y) * lerpSpeed;
@@ -452,13 +453,8 @@
             draw() {
                 const perspective = 300;
                 const dist = perspective - this.z;
-
-                // SAFETY: If point is behind camera or too close (dist < 10), don't draw
                 if (dist < 10) return;
-
                 const scale = perspective / dist;
-
-                // SAFETY: If scale is massive (screen filling), skip
                 if (scale > 5.0) return;
 
                 ctx.beginPath();
@@ -468,18 +464,11 @@
             }
         }
 
-        // ------------------------------------------------------------------
-        // APP LOGIC
-        // ------------------------------------------------------------------
-
         function recenterNodes(explode = true) {
             nodes = [];
             const centerX = width / 2;
             const centerY = (height / 2) + 0;
             const scale = Math.min(width, height) * 0.40;
-
-            // On first call (from script load), explode is true.
-            // On resize, we pass false manually.
 
             faceModel.forEach(p => {
                 const node = new FaceNode(p.x, p.y, p.z || 0, p.g, p.origY);
@@ -487,17 +476,15 @@
                 nodes.push(node);
             });
 
-            // Disable explosion for future operations (like resize, if logic changes)
             if (explode && isFirstSpawn) {
                 isFirstSpawn = false;
             }
         }
 
         async function initApp() {
-            if (isAudioInitialized) return; // Prevent double init
+            if (isAudioInitialized) return;
 
             try {
-                // HIGH RES FOR DISTANCE
                 const stream = await navigator.mediaDevices.getUserMedia({
                     audio: true,
                     video: { width: 640, height: 480, frameRate: 15 }
@@ -520,7 +507,6 @@
                 video.play();
 
                 const tracker = new tracking.ObjectTracker('face');
-                // SCALE 2 = DETECT SMALLER FACES (FURTHER AWAY)
                 tracker.setInitialScale(2);
                 tracker.setStepSize(2);
                 tracker.setEdgesDensity(0.1);
@@ -537,7 +523,6 @@
                         const face = event.data[0];
                         const cx = face.x + face.width / 2;
                         const cy = face.y + face.height / 2;
-                        // MAPPED TO 640x480 - NO INVERSION based on user feedback
                         const normX = (cx / 640) * 2 - 1;
                         const normY = (cy / 480) * 2 - 1;
                         trackingX = normX;
@@ -590,12 +575,8 @@
 
             if (currentState === 'FACE') updateBlink();
 
-            // DRAW BACKLIGHT
-            // Pulse with audio or idle sine
             let glowRadius = 200 + (audioVol * 2);
-            if (!isAudioInitialized) {
-                glowRadius = 200 + Math.sin(time * 0.002) * 30;
-            }
+            if (!isAudioInitialized) glowRadius = 200 + Math.sin(time * 0.002) * 30;
 
             const glow = ctx.createRadialGradient(width / 2, height / 2, 50, width / 2, height / 2, glowRadius * 2);
             glow.addColorStop(0, "rgba(0, 255, 0, 0.25)");
@@ -605,11 +586,9 @@
             ctx.fillStyle = glow;
             ctx.fillRect(0, 0, width, height);
 
-            // UPDATE
             nodes.forEach(n => n.update(time, audioVol, currentState));
             nodes.sort((a, b) => a.z - b.z);
 
-            // DRAW CONNECTIONS
             const maxConnectDist = config.connectionDistance * config.connectionDistance;
             for (let i = 0; i < nodes.length; i++) {
                 const nodeA = nodes[i];
@@ -634,17 +613,13 @@
                 }
             }
 
-            // DRAW NODES
             nodes.forEach(n => n.draw());
-
             requestAnimationFrame(animate);
         }
 
-        // Initialize with IMPLOSION
-        resize(); // Calls checkNodes -> triggers first spawn explosion
+        resize();
         animate(0);
 
-        // Click Anywhere to Start
         document.addEventListener('click', () => initApp());
 
     </script>
