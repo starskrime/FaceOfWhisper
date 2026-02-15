@@ -255,78 +255,123 @@
             faceModel.push(...generateBezier(0.05, 0.2, 0.35, 0.12, 0.18, 0.3, 0.15, 0.25, 0.25, 0.02, 0.23, 0.3, 12, 2)); // R Nostril
             faceModel.push(...generateBezier(-0.02, 0.23, 0.3, 0, 0.25, 0.55, 0, 0.25, 0.55, 0.02, 0.23, 0.3, 10, 2)); // Tip Loop
 
-            // 3. MOUTH (Oral) - Group 3/4
+            // 3. ADVANCED VOLUMETRIC MOUTH (Groups 3/4)
+            // ----------------------------------------------------
             const MY = 0.45;
-            faceModel.push(...generateBezier(-0.25, MY, 0.1, -0.15, MY - 0.08, 0.15, -0.05, MY - 0.02, 0.2, 0, MY - 0.05, 0.2, 15, 3)); // L Upper
-            faceModel.push(...generateBezier(0, MY - 0.05, 0.2, 0.05, MY - 0.02, 0.2, 0.15, MY - 0.08, 0.15, 0.25, MY, 0.1, 15, 3)); // R Upper
-            faceModel.push(...generateBezier(-0.25, MY, 0.1, -0.1, MY + 0.02, 0.25, 0.1, MY + 0.02, 0.25, 0.25, MY, 0.1, 25, 3)); // Mid Line
-            faceModel.push(...generateBezier(-0.25, MY, 0.1, -0.1, MY + 0.02, 0.25, 0.1, MY + 0.02, 0.25, 0.25, MY, 0.1, 25, 4)); // Mid Line (Lower)
-            faceModel.push(...generateBezier(-0.25, MY, 0.1, -0.12, MY + 0.15, 0.2, 0.12, MY + 0.15, 0.2, 0.25, MY, 0.1, 25, 4)); // Lower Lip Bottom
+            
+            // Generate Mesh Function (Vertical Ribbing + Horizontal Contours)
+            // Creates a grid: 'rows' are contour lines, 'cols' creates vertical connections
+            function generateLipSurface(rowsData, colsInRow, group) {
+                // rowsData: array of control points for each Bezier curve row [ {x0,y0...}, {x0,y0...} ]
+                const surfacePts = [];
+                const rows = [];
+                
+                // Generate all rows first
+                rowsData.forEach(d => {
+                    rows.push(generateBezier(d.x0, d.y0, d.z0, d.x1, d.y1, d.z1, d.x2, d.y2, d.z2, d.x3, d.y3, d.z3, colsInRow, group));
+                });
+
+                // Add all row points to model
+                rows.forEach(r => surfacePts.push(...r));
+
+                // Add VERTICAL RIBBING (Connect row i to row i+1)
+                for (let r = 0; r < rows.length - 1; r++) {
+                    const rowA = rows[r];
+                    const rowB = rows[r+1];
+                    // We don't add points, but strictly visualizing connection isn't enough?
+                    // Wait, the renderer connects close points. 
+                    // So we just need DENSE points in a grid pattern.
+                    // To ensure vertical lines, we add intermediate points between rows if needed?
+                    // Actually, if connectionDistance is right, they will connect vertically.
+                }
+                return surfacePts;
+            }
+
+            // UPPER LIP (Group 3)
+            // Row 1: Vermilion Border (Top Edge) - Sharp
+            // Row 2: Mid Pout (Volumetric) - Forward Z
+            // Row 3: Wetline (Bottom Edge) - Recessed Z
+            
+            // Left Upper
+            faceModel.push(...generateBezier(-0.25, MY, 0.1, -0.15, MY - 0.08, 0.15, -0.05, MY - 0.02, 0.2, 0, MY - 0.05, 0.2, 15, 3)); // Border
+            faceModel.push(...generateBezier(-0.25, MY, 0.1, -0.15, MY - 0.05, 0.25, -0.05, MY + 0.0, 0.35, 0, MY - 0.02, 0.35, 15, 3)); // Pout (Projected)
+            faceModel.push(...generateBezier(-0.25, MY, 0.1, -0.15, MY + 0.02, 0.15, -0.05, MY + 0.02, 0.15, 0, MY, 0.15, 15, 3)); // Wetline
+
+            // Right Upper
+            faceModel.push(...generateBezier(0, MY - 0.05, 0.2, 0.05, MY - 0.02, 0.2, 0.15, MY - 0.08, 0.15, 0.25, MY, 0.1, 15, 3)); // Border
+            faceModel.push(...generateBezier(0, MY - 0.02, 0.35, 0.05, MY + 0.0, 0.35, 0.15, MY - 0.05, 0.25, 0.25, MY, 0.1, 15, 3)); // Pout
+            faceModel.push(...generateBezier(0, MY, 0.15, 0.05, MY + 0.02, 0.15, 0.15, MY + 0.02, 0.15, 0.25, MY, 0.1, 15, 3)); // Wetline
+
+
+            // LOWER LIP (Group 4)
+            // Row 1: Wetline (Top Edge) - Matches Upper Wetline Z
+            // Row 2: Mid Pout (Volumetric) - Forward Z (Fuller)
+            // Row 3: Vermilion Border (Bottom Edge) - Recessed
+            
+            // Full Arc (Left to Right)
+            faceModel.push(...generateBezier(-0.25, MY, 0.1, -0.12, MY + 0.02, 0.15, 0.12, MY + 0.02, 0.15, 0.25, MY, 0.1, 30, 4)); // Wetline
+            faceModel.push(...generateBezier(-0.25, MY, 0.1, -0.12, MY + 0.08, 0.40, 0.12, MY + 0.08, 0.40, 0.25, MY, 0.1, 30, 4)); // Pout (High Z)
+            faceModel.push(...generateBezier(-0.25, MY, 0.1, -0.12, MY + 0.15, 0.2, 0.12, MY + 0.15, 0.2, 0.25, MY, 0.1, 30, 4)); // Border
+
 
             // 4. FACE CONTOUR EXTENDED (Jaw/Cheek Wrap) - Group 5
             // ----------------------------------------------------
             // Jawline wrapping back to Ear
-            // L: Chin -> Jaw Angle -> Ear Bottom
-            faceModel.push(...generateBezier(0, 0.95, 0.2, -0.3, 0.9, 0.15, -0.55, 0.5, 0.0, -0.65, 0.1, 0.2, 40, 5)); 
-            // R: Chin -> Jaw Angle -> Ear Bottom
-            faceModel.push(...generateBezier(0, 0.95, 0.2, 0.3, 0.9, 0.15, 0.55, 0.5, 0.0, 0.65, 0.1, 0.2, 40, 5));
+            faceModel.push(...generateBezier(0, 0.95, 0.2, -0.3, 0.9, 0.15, -0.55, 0.5, 0.0, -0.65, 0.1, 0.2, 40, 5)); // L
+            faceModel.push(...generateBezier(0, 0.95, 0.2, 0.3, 0.9, 0.15, 0.55, 0.5, 0.0, 0.65, 0.1, 0.2, 40, 5)); // R
 
             // Cheekbones wrapping back to Ear Top
-            // L: Nose Area -> Zygomatic Arch -> Ear Top
-            faceModel.push(...generateBezier(-0.2, 0.1, 0.25, -0.35, 0.05, 0.2, -0.55, -0.1, 0.1, -0.65, -0.15, 0.2, 30, 5));
-            // R: Nose Area -> Zygomatic Arch -> Ear Top
-            faceModel.push(...generateBezier(0.2, 0.1, 0.25, 0.35, 0.05, 0.2, 0.55, -0.1, 0.1, 0.65, -0.15, 0.2, 30, 5));
+            faceModel.push(...generateBezier(-0.2, 0.1, 0.25, -0.35, 0.05, 0.2, -0.55, -0.1, 0.1, -0.65, -0.15, 0.2, 30, 5)); // L
+            faceModel.push(...generateBezier(0.2, 0.1, 0.25, 0.35, 0.05, 0.2, 0.55, -0.1, 0.1, 0.65, -0.15, 0.2, 30, 5)); // R
 
 
-            // 5. EARS (Auricle) - Group 7
-            // ----------------------------------------------------
-            // Left Ear
+            // 5. TECHNO EARS (Group 7)
             const LEX = -0.7, LEY = -0.05, LEZ = 0.25;
-            // Helix (Outer Rim C-shape)
-            faceModel.push(...generateBezier(LEX, LEY - 0.2, LEZ, LEX - 0.15, LEY - 0.25, LEZ - 0.05, LEX - 0.15, LEY + 0.15, LEZ - 0.05, LEX, LEY + 0.25, LEZ, 20, 7));
-            // Tragus/Lobe connection
-            faceModel.push(...generateBezier(LEX, LEY + 0.25, LEZ, LEX + 0.05, LEY + 0.2, LEZ + 0.05, LEX + 0.05, LEY - 0.15, LEZ + 0.05, LEX, LEY - 0.2, LEZ, 15, 7));
+            faceModel.push(...generateBezier(LEX, LEY - 0.2, LEZ, LEX - 0.2, LEY - 0.25, LEZ - 0.05, LEX - 0.2, LEY + 0.15, LEZ - 0.05, LEX, LEY + 0.25, LEZ, 25, 7)); // Outer
+            faceModel.push(...generateBezier(LEX + 0.05, LEY - 0.15, LEZ, LEX - 0.15, LEY - 0.20, LEZ - 0.05, LEX - 0.15, LEY + 0.10, LEZ - 0.05, LEX + 0.05, LEY + 0.20, LEZ, 20, 7)); // Inner
+            faceModel.push(...generateBezier(LEX + 0.05, LEY + 0.20, LEZ, LEX + 0.08, LEY + 0.0, LEZ + 0.02, LEX + 0.08, LEY - 0.05, LEZ + 0.02, LEX + 0.05, LEY - 0.15, LEZ, 15, 7)); // Antihelix
+            faceModel.push({ x: LEX + 0.1, y: LEY + 0.05, z: LEZ + 0.05, g: 7, origY: LEY });
 
-            // Right Ear
             const REX = 0.7, REY = -0.05, REZ = 0.25;
-            // Helix
-            faceModel.push(...generateBezier(REX, REY - 0.2, REZ, REX + 0.15, REY - 0.25, REZ - 0.05, REX + 0.15, REY + 0.15, REZ - 0.05, REX, REY + 0.25, REZ, 20, 7));
-            // Tragus/Lobe
-            faceModel.push(...generateBezier(REX, REY + 0.25, REZ, REX - 0.05, REY + 0.2, REZ + 0.05, REX - 0.05, REY - 0.15, REZ + 0.05, REX, REY - 0.2, REZ, 15, 7));
+            faceModel.push(...generateBezier(REX, REY - 0.2, REZ, REX + 0.2, REY - 0.25, REZ - 0.05, REX + 0.2, REY + 0.15, REZ - 0.05, REX, REY + 0.25, REZ, 25, 7)); // Outer
+            faceModel.push(...generateBezier(REX - 0.05, REY - 0.15, REZ, REX + 0.15, REY - 0.20, REZ - 0.05, REX + 0.15, REY + 0.10, REZ - 0.05, REX - 0.05, REY + 0.20, REZ, 20, 7)); // Inner
+            faceModel.push(...generateBezier(REX - 0.05, REY + 0.20, REZ, REX - 0.08, REY + 0.0, REZ + 0.02, REX - 0.08, REY - 0.05, REZ + 0.02, REX - 0.05, REY - 0.15, REZ, 15, 7)); // Antihelix
+             faceModel.push({ x: REX - 0.1, y: REY + 0.05, z: REZ + 0.05, g: 7, origY: REY });
 
 
-            // 6. CRANIUM (Full Skull Volume) - Group 8 (Static)
-            // ----------------------------------------------------
-            // Top of Head: Forehead -> Crown -> Back
+            // 6. CRANIUM (Group 8)
             faceModel.push(...generateBezier(0, -0.65, 0.25, 0, -0.85, 0.1, 0, -0.85, -0.5, 0, -0.5, -0.8, 40, 8));
-            
-            // Side Parietal (Temples -> Back)
-            // L
-            faceModel.push(...generateBezier(-0.55, -0.4, 0.1, -0.65, -0.6, 0.0, -0.65, -0.6, -0.5, -0.4, -0.4, -0.75, 35, 8));
-            // R
-            faceModel.push(...generateBezier(0.55, -0.4, 0.1, 0.65, -0.6, 0.0, 0.65, -0.6, -0.5, 0.4, -0.4, -0.75, 35, 8));
-
-            // Occipital (Lower Back of Head)
-            // L Ear -> Back of Neck -> R Ear
+            faceModel.push(...generateBezier(-0.55, -0.4, 0.1, -0.65, -0.6, 0.0, -0.65, -0.6, -0.5, -0.4, -0.4, -0.75, 35, 8)); // L
+            faceModel.push(...generateBezier(0.55, -0.4, 0.1, 0.65, -0.6, 0.0, 0.65, -0.6, -0.5, 0.4, -0.4, -0.75, 35, 8)); // R
             faceModel.push(...generateBezier(-0.65, 0.1, 0.2, -0.6, 0.3, -0.4, -0.2, 0.5, -0.7, 0, 0.5, -0.8, 25, 8)); // L Quarter
             faceModel.push(...generateBezier(0.65, 0.1, 0.2, 0.6, 0.3, -0.4, 0.2, 0.5, -0.7, 0, 0.5, -0.8, 25, 8)); // R Quarter
-            
-            // Horizontal Bands for Volume (Back of Head)
             faceModel.push(...generateEllipse(0, -0.2, 0.6, 0.65, -0.5, 40, Math.PI, 2 * Math.PI, 8)); // Upper
             faceModel.push(...generateEllipse(0, 0.2, 0.55, 0.6, -0.6, 40, Math.PI, 2 * Math.PI, 8)); // Mid
 
 
-            // 7. VOLUME FILLS (Skin) - Group 6
-            // ----------------------------------------------------
+            // 7. VOLUME FILLS (Group 6)
             faceModel.push(...generateFillDetailed(-0.35, 0.1, 0.1, 0.35, 0.4, 0.3, 200, 6)); // L Cheek
             faceModel.push(...generateFillDetailed(0.35, 0.1, 0.1, 0.35, 0.4, 0.3, 200, 6)); // R Cheek
             faceModel.push(...generateFillDetailed(0, -0.45, 0.1, 0.7, 0.3, 0.4, 150, 6)); // Forehead
             faceModel.push(...generateFillDetailed(0, 0.75, 0.15, 0.3, 0.25, 0.2, 60, 5)); // Chin
             faceModel.push(...generateFillDetailed(0, -0.1, 0.25, 0.15, 0.5, 0.3, 60, 2)); // Nose Bridge
 
-            // Side Fills (Temples area)
-            faceModel.push(...generateFillDetailed(-0.55, -0.2, 0.0, 0.2, 0.4, 0.2, 50, 6));
-            faceModel.push(...generateFillDetailed(0.55, -0.2, 0.0, 0.2, 0.4, 0.2, 50, 6));
+            // 8. TEMPORAL DATA LINES (Group 9)
+            const T_StartL = -0.55, T_EndL = -0.7;
+            faceModel.push(...generateBezier(T_StartL, -0.2, 0.1, -0.6, -0.2, 0.1, -0.65, -0.2, 0.15, T_EndL, -0.15, 0.25, 10, 9));
+            faceModel.push(...generateBezier(T_StartL, 0.0, 0.1, -0.6, 0.0, 0.1, -0.65, 0.0, 0.15, T_EndL, 0.05, 0.25, 10, 9));
+            faceModel.push(...generateBezier(T_StartL, 0.2, 0.1, -0.65, 0.25, 0.15, -0.68, 0.3, 0.2, -0.65, 0.1, 0.2, 10, 9));
+
+            const T_StartR = 0.55, T_EndR = 0.7;
+            faceModel.push(...generateBezier(T_StartR, -0.2, 0.1, 0.6, -0.2, 0.1, 0.65, -0.2, 0.15, T_EndR, -0.15, 0.25, 10, 9));
+            faceModel.push(...generateBezier(T_StartR, 0.0, 0.1, 0.6, 0.0, 0.1, 0.65, 0.0, 0.15, T_EndR, 0.05, 0.25, 10, 9));
+            faceModel.push(...generateBezier(T_StartR, 0.2, 0.1, 0.65, 0.25, 0.15, 0.68, 0.3, 0.2, 0.65, 0.1, 0.2, 10, 9));
+
+
+            // 9. SUBMANDIBULAR MESH (Group 10)
+            faceModel.push(...generateBezier(0, 0.95, 0.2, 0, 1.0, 0.0, 0, 0.8, -0.3, 0, 0.5, -0.5, 20, 10));
+            faceModel.push(...generateBezier(-0.2, 0.9, 0.15, -0.3, 0.95, -0.1, -0.5, 0.8, -0.3, -0.55, 0.5, -0.4, 20, 10)); // L
+            faceModel.push(...generateBezier(0.2, 0.9, 0.15, 0.3, 0.95, -0.1, 0.5, 0.8, -0.3, 0.55, 0.5, -0.4, 20, 10)); // R
         }
 
         buildFaceModel();
@@ -411,6 +456,7 @@
                         if (this.group === 5) audioMoveY = sensitivity * 80 * S; // Jaw
                         else if (this.group === 4) audioMoveY = sensitivity * 80 * S; // Lower Lip
                         else if (this.group === 3) audioMoveY = -sensitivity * 60 * S; // Upper Lip
+                        else if (this.group === 10) audioMoveY = sensitivity * 30 * S; // Throat
                     }
                     this.audioOffsetY += (audioMoveY - this.audioOffsetY) * 0.4;
                     by += this.audioOffsetY;
