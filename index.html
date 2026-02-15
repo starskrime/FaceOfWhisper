@@ -149,14 +149,14 @@
         const config = {
             nodeColor: '#00FF00',
             lineColor: 'rgba(0, 255, 0, 0.12)',
-            connectionDistance: 45,
-            nodeRadius: 1.2,
+            connectionDistance: 40, // Slightly reduced for density check
+            nodeRadius: 0.8, // Finer nodes for hi-fi look
             idleAmplitude: 2.0,
             idleSpeed: 0.0015,
-            audioSensitivity: 1.5, // Boosted sensitivity
+            audioSensitivity: 1.5,
             sphereRadiusRatio: 0.35,
             silenceTimeout: 10000,
-            speechThreshold: 5, // Lower threshold
+            speechThreshold: 5,
             transitionSpeedToFace: 0.15,
             transitionSpeedToSphere: 0.02,
             lookSpeed: 0.05,
@@ -192,28 +192,38 @@
             return pts;
         }
 
-        function generateParabola(x1, y1, z1, cx, cy, cz, x2, y2, z2, count, group = 0) {
+        // CUBIC BEZIER (For organic curves: Lips, Eyelids, Nose Profile)
+        function generateBezier(x0, y0, z0, x1, y1, z1, x2, y2, z2, x3, y3, z3, count, group = 0) {
             const pts = [];
             for (let i = 0; i <= count; i++) {
                 const t = i / count;
-                const x = (1 - t) * (1 - t) * x1 + 2 * (1 - t) * t * cx + t * t * x2;
-                const y = (1 - t) * (1 - t) * y1 + 2 * (1 - t) * t * cy + t * t * y2;
-                const z = (1 - t) * (1 - t) * z1 + 2 * (1 - t) * t * cz + t * t * z2;
+                const it = 1 - t;
+                // B(t) = (1-t)^3P0 + 3(1-t)^2tP1 + 3(1-t)t^2P2 + t^3P3
+                const x = (it * it * it * x0) + (3 * it * it * t * x1) + (3 * it * t * t * x2) + (t * t * t * x3);
+                const y = (it * it * it * y0) + (3 * it * it * t * y1) + (3 * it * t * t * y2) + (t * t * t * y3);
+                const z = (it * it * it * z0) + (3 * it * it * t * z1) + (3 * it * t * t * z2) + (t * t * t * z3);
                 pts.push({ x, y, z, g: group, origY: y });
             }
             return pts;
         }
 
-        function generateFill(cx, cy, cz, width, height, depth, count, group = 0) {
+        function generateFillDetailed(cx, cy, cz, width, height, depth, count, group = 0) {
             const pts = [];
             for (let i = 0; i < count; i++) {
-                const y = cy + (Math.random() - 0.5) * height;
+                const y = (Math.random() - 0.5) * height;
+                // Limit fill to an oval shape based on height
+                const wAtY = width * Math.sqrt(Math.max(0, 1 - (2*y/height)*(2*y/height))); 
+                
+                const x = (Math.random() - 0.5) * wAtY;
+                // Curve Z based on X (Cylinder wrap)
+                const zOffset = Math.sqrt(Math.max(0, (wAtY/2)*(wAtY/2) - x*x)) * (depth/width) - (depth/2);
+                
                 pts.push({
-                    x: cx + (Math.random() - 0.5) * width,
-                    y: y,
-                    z: cz + (Math.random() - 0.5) * depth,
+                    x: cx + x,
+                    y: cy + y,
+                    z: cz + zOffset,
                     g: group,
-                    origY: y
+                    origY: cy + y
                 });
             }
             return pts;
@@ -222,58 +232,97 @@
         let faceModel = [];
 
         function buildFaceModel() {
-            // HIGH-FIDELITY WIREFRAME STRUCTURE (Topological Mesh)
+            // BIOMETRIC FACE SCULPT (Parametric Anatomy)
             faceModel = [];
 
-            // 1. ANIMATED FEATURES (Keep these for movement/blinking)
-            // ----------------------------------------------------------------
-            // EYES (Group 1) - Detailed Rings
-            faceModel.push(...generateEllipse(-0.35, -0.2, 0.12, 0.08, -0.1, 24, 0, Math.PI * 2, 1)); // L
-            faceModel.push(...generateEllipse(0.35, -0.2, 0.12, 0.08, -0.1, 24, 0, Math.PI * 2, 1)); // R
-            faceModel.push({ x: -0.35, y: -0.2, z: -0.05, g: 1, origY: -0.2 });
-            faceModel.push({ x: 0.35, y: -0.2, z: -0.05, g: 1, origY: -0.2 });
+            // 1. EYES (Orbitals) - Group 1
+            // ----------------------------------------------------
+            // Left Eye
+            const LX = -0.35, LY = -0.2, LZ = -0.1;
+            // Upper Lid (Almond)
+            faceModel.push(...generateBezier(LX - 0.18, LY, LZ, LX - 0.05, LY - 0.12, LZ, LX + 0.05, LY - 0.12, LZ, LX + 0.18, LY, LZ, 15, 1));
+            // Lower Lid (Almond)
+            faceModel.push(...generateBezier(LX - 0.18, LY, LZ, LX - 0.05, LY + 0.08, LZ, LX + 0.05, LY + 0.08, LZ, LX + 0.18, LY, LZ, 15, 1));
+            // Iris Rings
+            faceModel.push(...generateEllipse(LX, LY, 0.09, 0.09, LZ - 0.02, 16, 0, Math.PI * 2, 1));
+            faceModel.push(...generateEllipse(LX, LY, 0.05, 0.05, LZ - 0.04, 12, 0, Math.PI * 2, 1));
+            // Pupil
+            faceModel.push({ x: LX, y: LY, z: LZ - 0.05, g: 1, origY: LY });
 
-            // MOUTH (Groups 3 & 4)
-            faceModel.push(...generateParabola(-0.25, 0.4, 0.1, 0, 0.35, 0.25, 0.25, 0.4, 0.1, 30, 3));
-            faceModel.push(...generateParabola(-0.25, 0.4, 0.1, 0, 0.55, 0.25, 0.25, 0.4, 0.1, 30, 4));
-
-            // JAWLINE (Group 5)
-            // Stronger, defined jaw
-            faceModel.push(...generateParabola(-0.65, -0.3, -0.3, -0.55, 0.8, 0.0, 0, 0.95, 0.2, 40, 5)); // L
-            faceModel.push(...generateParabola(0, 0.95, 0.2, 0.55, 0.8, 0.0, 0.65, -0.3, -0.3, 40, 5)); // R
-
-
-            // 2. STRUCTURAL WIREFRAME (The "Hi-Fi" Mesh)
-            // ----------------------------------------------------------------
-            // Instead of random dots, we create structured "Iso-lines" (Topography)
-
-            // A. VERTICAL LONGITUDE LINES (Forehead to Chin flow)
-            // Center Line (Nose Bridge)
-            faceModel.push(...generateParabola(0, -0.7, 0.3, 0, -0.2, 0.45, 0, 0.2, 0.5, 20, 6));
-            // Mid-Face Lines (Inner Cheeks)
-            faceModel.push(...generateParabola(-0.25, -0.65, 0.2, -0.2, 0.0, 0.35, -0.15, 0.8, 0.3, 20, 6)); // L
-            faceModel.push(...generateParabola(0.25, -0.65, 0.2, 0.2, 0.0, 0.35, 0.15, 0.8, 0.3, 20, 6)); // R
-            // Outer Face Lines (Cheekbones/Temples)
-            faceModel.push(...generateParabola(-0.5, -0.5, 0.1, -0.45, 0.1, 0.2, -0.35, 0.7, 0.15, 20, 6)); // L
-            faceModel.push(...generateParabola(0.5, -0.5, 0.1, 0.45, 0.1, 0.2, 0.35, 0.7, 0.15, 20, 6)); // R
+            // Right Eye
+            const RX = 0.35, RY = -0.2, RZ = -0.1;
+            // Upper Lid
+            faceModel.push(...generateBezier(RX - 0.18, RY, RZ, RX - 0.05, RY - 0.12, RZ, RX + 0.05, RY - 0.12, RZ, RX + 0.18, RY, RZ, 15, 1));
+            // Lower Lid
+            faceModel.push(...generateBezier(RX - 0.18, RY, RZ, RX - 0.05, RY + 0.08, RZ, RX + 0.05, RY + 0.08, RZ, RX + 0.18, RY, RZ, 15, 1));
+            // Iris
+            faceModel.push(...generateEllipse(RX, RY, 0.09, 0.09, RZ - 0.02, 16, 0, Math.PI * 2, 1));
+            faceModel.push(...generateEllipse(RX, RY, 0.05, 0.05, RZ - 0.04, 12, 0, Math.PI * 2, 1));
+            // Pupil
+            faceModel.push({ x: RX, y: RY, z: RZ - 0.05, g: 1, origY: RY });
 
 
-            // B. HORIZONTAL LATITUDE LINES (Cross-sections)
-            // Forehead Top
-            faceModel.push(...generateEllipse(0, -0.6, 0.5, 0.1, 0.2, 30, Math.PI, 2 * Math.PI, 6));
-            // Brow Line
-            faceModel.push(...generateParabola(-0.55, -0.35, 0.1, 0, -0.35, 0.35, 0.55, -0.35, 0.1, 30, 6));
-            // Under-Eye / Cheekbone Line
-            faceModel.push(...generateParabola(-0.6, -0.05, 0.1, 0, -0.1, 0.4, 0.6, -0.05, 0.1, 35, 6));
-            // Nose Tip Line (Short)
-            faceModel.push(...generateParabola(-0.15, 0.2, 0.3, 0, 0.22, 0.55, 0.15, 0.2, 0.3, 15, 6));
-            // Upper Lip / Cheek Line
-            faceModel.push(...generateParabola(-0.5, 0.3, 0.1, 0, 0.28, 0.4, 0.5, 0.3, 0.1, 30, 6));
-            // Chin Ridge
-            faceModel.push(...generateParabola(-0.25, 0.85, 0.2, 0, 0.9, 0.3, 0.25, 0.85, 0.2, 20, 6));
+            // 2. NOSE (Nasal Bone & Cartilage) - Group 2 (Static)
+            // ----------------------------------------------------
+            // Bridge (Vertical Curve)
+            faceModel.push(...generateBezier(0, -0.35, -0.15, 0, -0.2, 0.35, 0, 0.1, 0.45, 0, 0.15, 0.5, 20, 2));
+            // Side Bridges (Width)
+            faceModel.push(...generateBezier(-0.08, -0.3, -0.05, -0.12, -0.1, 0.2, -0.15, 0.1, 0.25, -0.18, 0.18, 0.2, 20, 2)); // L
+            faceModel.push(...generateBezier(0.08, -0.3, -0.05, 0.12, -0.1, 0.2, 0.15, 0.1, 0.25, 0.18, 0.18, 0.2, 20, 2)); // R
+            // Nostrils (Loop/Spiral)
+            faceModel.push(...generateBezier(-0.05, 0.2, 0.35, -0.12, 0.18, 0.3, -0.15, 0.25, 0.25, -0.02, 0.23, 0.3, 12, 2)); // L
+            faceModel.push(...generateBezier(0.05, 0.2, 0.35, 0.12, 0.18, 0.3, 0.15, 0.25, 0.25, 0.02, 0.23, 0.3, 12, 2)); // R
+            // Tip Bulb
+            faceModel.push(...generateEllipse(0, 0.18, 0.08, 0.06, 0.52, 10, 0, Math.PI * 2, 2));
 
-            // C. CRANIUM (Back of head structure) - Low density
-            faceModel.push(...generateEllipse(0, -0.2, 0.68, 0.75, -0.2, 40, Math.PI, 2 * Math.PI, 0));
+
+            // 3. MOUTH (Oral) - Group 3 (Upper) & 4 (Lower)
+            // ----------------------------------------------------
+            // Cupid's Bow (Upper Lip Top)
+            const MY = 0.45;
+            faceModel.push(...generateBezier(-0.25, MY, 0.1, -0.15, MY - 0.08, 0.15, -0.05, MY - 0.02, 0.2, 0, MY - 0.05, 0.2, 10, 3)); // L
+            faceModel.push(...generateBezier(0, MY - 0.05, 0.2, 0.05, MY - 0.02, 0.2, 0.15, MY - 0.08, 0.15, 0.25, MY, 0.1, 10, 3)); // R
+            // Upper Lip Bottom (Meeting line)
+            faceModel.push(...generateBezier(-0.25, MY, 0.1, -0.1, MY + 0.02, 0.25, 0.1, MY + 0.02, 0.25, 0.25, MY, 0.1, 20, 3));
+
+            // Lower Lip Top (Meeting line)
+            faceModel.push(...generateBezier(-0.25, MY, 0.1, -0.1, MY + 0.02, 0.25, 0.1, MY + 0.02, 0.25, 0.25, MY, 0.1, 20, 4));
+            // Lower Lip Bottom (Fullness)
+            faceModel.push(...generateBezier(-0.25, MY, 0.1, -0.12, MY + 0.15, 0.2, 0.12, MY + 0.15, 0.2, 0.25, MY, 0.1, 20, 4));
+
+
+            // 4. FACE CONTOUR (Mandible/Zygomatic) - Group 5
+            // ----------------------------------------------------
+            // Jawline
+            faceModel.push(...generateBezier(-0.6, -0.2, -0.2, -0.55, 0.5, 0.0, -0.25, 0.9, 0.15, 0, 0.95, 0.2, 30, 5)); // L
+            faceModel.push(...generateBezier(0.6, -0.2, -0.2, 0.55, 0.5, 0.0, 0.25, 0.9, 0.15, 0, 0.95, 0.2, 30, 5)); // R
+            
+            // Cheekbones (Zygomatic Arch)
+            faceModel.push(...generateBezier(-0.6, -0.1, -0.2, -0.45, -0.05, 0.2, -0.3, 0.3, 0.15, -0.2, 0.45, 0.1, 20, 5)); // L
+            faceModel.push(...generateBezier(0.6, -0.1, -0.2, 0.45, -0.05, 0.2, 0.3, 0.3, 0.15, 0.2, 0.45, 0.1, 20, 5)); // R
+
+
+            // 5. FOREHEAD (Cranium) - Group 0/6
+            // ----------------------------------------------------
+            // Brow Ridge
+            faceModel.push(...generateBezier(-0.5, -0.3, 0.0, -0.2, -0.35, 0.15, 0.2, -0.35, 0.15, 0.5, -0.3, 0.0, 30, 0));
+            // Hairline/Top
+            faceModel.push(...generateEllipse(0, -0.65, 0.55, 0.25, -0.1, 30, Math.PI, 2*Math.PI, 0));
+
+
+            // 6. VOLUME FILL (High Density Skin) - Group 6
+            // ----------------------------------------------------
+            // Cheeks
+            faceModel.push(...generateFillDetailed(-0.35, 0.1, 0.1, 0.35, 0.4, 0.3, 200, 6)); // L
+            faceModel.push(...generateFillDetailed(0.35, 0.1, 0.1, 0.35, 0.4, 0.3, 200, 6)); // R
+            // Forehead
+            faceModel.push(...generateFillDetailed(0, -0.45, 0.1, 0.7, 0.3, 0.4, 150, 6));
+            // Chin
+            faceModel.push(...generateFillDetailed(0, 0.75, 0.15, 0.3, 0.25, 0.2, 60, 5));
+            // Nose Bridge Sides
+            faceModel.push(...generateFillDetailed(0, -0.1, 0.25, 0.15, 0.5, 0.3, 60, 2));
+
+            // Total nodes: ~1000+
         }
 
         buildFaceModel();
